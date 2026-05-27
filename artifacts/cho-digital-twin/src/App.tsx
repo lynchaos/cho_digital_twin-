@@ -58,7 +58,7 @@ function AboutPage() {
           <tr><td>μ_net growth rate (§2.3)</td><td>§2.3</td>
             <td className="status-partial">⚠ Three modes: Sigmoid · Monod proxy · Surrogate NN (auto-calibrated from Monod proxy; full NN needs proprietary 23-batch dataset)</td></tr>
           <tr><td>MetRaC rate estimation + q_p</td><td>§2.2</td>
-            <td className="status-partial">⚠ Simplified: finite-diff + kernel-smoothed Bayesian CI; includes q_p estimation from noisy titer (no nested sampling)</td></tr>
+            <td className="status-partial">⚠ Two methods: (a) kernel-smooth finite-diff (fast); (b) SE-kernel GP with analytical derivative posterior — proper Bayesian CIs, length-scale via marginal likelihood. Full nested-sampling B-splines not implemented.</td></tr>
           <tr><td>PC-dFBA hybrid LP</td><td>Eqs. 27–33</td>
             <td className="status-partial">⚠ Condensed 10-met/16-rxn network; analytical mass-balance solver; PC analysis from flux trajectories (iCHO2441 + full NN loadings not available)</td></tr>
         </tbody>

@@ -12,7 +12,7 @@
  * 23-batch AstraZeneca/Sartorius dataset.
  */
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, ReferenceLine, Area, ComposedChart,
@@ -164,6 +164,8 @@ export default function MetRaCPage() {
   const [sampleEvery, setSampleEvery] = useState(1.0);
   const [running, setRunning] = useState(false);
   const [seed, setSeed] = useState(0);  // bumped to regenerate noise
+  const [method, setMethod] = useState<"kernel" | "gp">("kernel");
+  const methodRef = useRef<"kernel" | "gp">("kernel");
 
   const [odesim, setOdesim]   = useState<TimePoint[]>([]);
   const [meas,   setMeas]     = useState<NoisyMeasurement[]>([]);
@@ -182,13 +184,19 @@ export default function MetRaCPage() {
       });
       const outTimes = sim.map((r) => r.t);
       const bolusDay = DEFAULT_FEED_BOLUSES.map((f) => f.day);
-      const metrac = runMetRaC(measurements, noiseConfig, outTimes, bandwidth, bolusDay);
+      const metrac = runMetRaC(measurements, noiseConfig, outTimes, bandwidth, bolusDay, methodRef.current);
       setOdesim(sim);
       setMeas(measurements);
       setRates(metrac);
       setRunning(false);
     }, 20);
   }, [noiseConfig, bandwidth, sampleEvery, seed]);
+
+  const handleMethodChange = (m: "kernel" | "gp") => {
+    methodRef.current = m;
+    setMethod(m);
+    run();
+  };
 
   useEffect(() => { run(); }, []);
 
@@ -228,7 +236,10 @@ export default function MetRaCPage() {
         <div>
           <h1 className="metrac-title">MetRaC — Metabolic Rate Calculation</h1>
           <p className="metrac-subtitle">
-            Simplified Bayesian rate estimation · §2.2 Richelle et al. (2025)
+            Bayesian rate estimation · §2.2 Richelle et al. (2025) ·
+            <span className={`metrac-method-badge${method === "gp" ? " gp" : ""}`}>
+              {method === "gp" ? "GP Regression" : "Kernel Smooth"}
+            </span>
           </p>
         </div>
         <button className="run-btn metrac-run-btn" onClick={() => { setSeed((s) => s + 1); run(); }} disabled={running}>
@@ -238,14 +249,29 @@ export default function MetRaCPage() {
 
       {/* ── Algorithm callout ──────────────────────────────────────────────── */}
       <div className="metrac-algo-box">
-        <strong>Algorithm:</strong>&nbsp;
-        (1) Run ODE as virtual bioreactor → (2) Add Gaussian measurement noise →
-        (3) Centered finite-difference dC/dt → (4) q = −(dC/dt) / X_v →
-        (5) Nadaraya-Watson kernel smoother → (6) 95% credible intervals via variance propagation.
-        &nbsp;<span className="metrac-algo-note">
-          The paper (§2.2) uses nested-sampling B-splines; this is algorithmically equivalent
-          but avoids the nested-sampling library requirement.
-        </span>
+        {method === "kernel" ? (
+          <>
+            <strong>Kernel method:</strong>&nbsp;
+            (1) ODE virtual bioreactor → (2) Gaussian measurement noise →
+            (3) Centred finite-diff dC/dt → (4) q = −(dC/dt) / X_v →
+            (5) Nadaraya-Watson kernel smoother with bandwidth h →
+            (6) 95% CI via inverse-variance propagation.
+            &nbsp;<span className="metrac-algo-note">Fast; CI is approximate (depends on h choice).</span>
+          </>
+        ) : (
+          <>
+            <strong>GP method:</strong>&nbsp;
+            (1) ODE virtual bioreactor → (2) Gaussian measurement noise →
+            (3) Fit SE-kernel GP to raw concentrations with known σ_n →
+            (4) Length-scale l optimised by marginal likelihood →
+            (5) Analytical derivative posterior μ′(t), σ′(t) →
+            (6) q = sign · μ′(t) / X_v with 95% CI = ±1.96 σ′(t)/X_v.
+            &nbsp;<span className="metrac-algo-note">
+              Proper Bayesian posterior on dC/dt · no finite-difference artefacts ·
+              closest in-browser equivalent to paper's nested-sampling B-splines.
+            </span>
+          </>
+        )}
       </div>
 
       {/* ── Layout ─────────────────────────────────────────────────────────── */}
@@ -291,16 +317,42 @@ export default function MetRaCPage() {
           </section>
 
           <section className="ctrl-section">
+            <h3 className="ctrl-sect-title">Estimation Method</h3>
+            <div className="metrac-method-row">
+              <button
+                className={`metrac-method-btn${method === "kernel" ? " active" : ""}`}
+                onClick={() => handleMethodChange("kernel")}
+                disabled={running}>
+                Kernel smooth
+              </button>
+              <button
+                className={`metrac-method-btn${method === "gp" ? " active" : ""}`}
+                onClick={() => handleMethodChange("gp")}
+                disabled={running}>
+                GP Regression
+              </button>
+            </div>
+            {method === "gp" && (
+              <p className="ctrl-hint" style={{ marginTop: "0.4rem" }}>
+                SE-kernel GP on raw concentrations. Length-scale l auto-optimised
+                by log marginal likelihood. Bandwidth slider inactive.
+              </p>
+            )}
+          </section>
+
+          <section className={`ctrl-section${method === "gp" ? " ctrl-section--dim" : ""}`}>
             <h3 className="ctrl-sect-title">Smoother Bandwidth</h3>
             <p className="ctrl-hint">
               Kernel bandwidth h [days]. Larger = smoother trajectory, wider CI.
+              {method === "gp" && <em> (not used in GP mode)</em>}
             </p>
             <div className="metrac-noise-row">
               <span className="metrac-noise-label">h</span>
               <input type="range" min={0.3} max={4} step={0.1}
                 value={bandwidth}
                 onChange={(e) => setBandwidth(Number(e.target.value))}
-                className="metrac-noise-slider" />
+                className="metrac-noise-slider"
+                disabled={method === "gp"} />
               <span className="metrac-noise-val">{bandwidth.toFixed(1)} d</span>
             </div>
           </section>
@@ -378,16 +430,29 @@ export default function MetRaCPage() {
           )}
 
           <div className="sim-info" style={{ marginTop: "1rem" }}>
-            <strong>How to read:</strong> The shaded 95% CI band is derived from Gaussian
-            measurement noise propagated through finite-difference derivatives.
-            A wider band means MetRaC is less certain — increase noise or reduce sampling
-            frequency to see the effect. When the MetRaC estimate (solid) tracks the ODE
-            truth (dashed) closely, rate estimation is accurate. The CIs should bracket
-            the truth ~95% of the time on average.
+            {method === "kernel" ? (
+              <>
+                <strong>Kernel method CIs:</strong> The 95% CI band comes from propagating
+                Gaussian measurement noise through centred finite differences and the
+                Nadaraya-Watson smoother. Wider band = less certain. Larger h → smoother
+                but broader CI. The CIs should bracket the truth ~95% of the time on average.
+              </>
+            ) : (
+              <>
+                <strong>GP method CIs:</strong> The shaded band is the ±1.96 σ posterior
+                on dC/dt from the SE-kernel GP, divided by X_v. The GP fits raw concentration
+                data (not derived rates), so there are no finite-difference artefacts.
+                The length-scale l is selected to maximise log marginal likelihood, which
+                balances fit quality against over-fitting. CIs widen naturally at culture
+                endpoints and in low-cell-density periods.
+              </>
+            )}
             <br />
-            <strong>Paper's method (§2.2):</strong> Richelle et al. use nested sampling
-            over B-spline coefficients for a full posterior; this implementation
-            is algorithmically equivalent using kernel-smoothed inverse-variance weighting.
+            <strong>Paper's approach (§2.2):</strong> Richelle et al. use nested sampling
+            over B-spline coefficients. The GP method here is structurally equivalent
+            (smooth latent function fitted to noisy observations, derivative posterior for
+            rates) but uses a more tractable marginal-likelihood kernel framework.
+            Full nested sampling is not implemented.
           </div>
         </div>
       </div>

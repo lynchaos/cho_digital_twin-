@@ -2,18 +2,27 @@
 /**
  * MetRaC — Metabolic Rate Calculation  (§2.2 Richelle et al. 2025)
  *
- * Pipeline:
- *   1. Finite-difference dC/dt on noisy concentration measurements
- *   2. Bolus correction: intervals spanning a feed event are de-weighted (10× σ)
- *   3. q_i = -(dC_i/dt) / Xv  (mass-balance specific rate)
- *   4. Gaussian error propagation → σ_q
- *   5. Nadaraya-Watson kernel smoother → posterior mean + 95% CI
+ * Two estimation methods:
  *
- * The paper (§2.2) uses nested-sampling B-splines; this is algorithmically
- * equivalent and avoids the nested-sampling library requirement.
+ *   "kernel" (default, fast):
+ *     1. Finite-difference dC/dt on noisy concentration measurements
+ *     2. Bolus correction: intervals spanning a feed event are de-weighted (10× σ)
+ *     3. q_i = -(dC_i/dt) / Xv
+ *     4. Gaussian error propagation → σ_q
+ *     5. Nadaraya-Watson kernel smoother → posterior mean + 95% CI
+ *
+ *   "gp" (Bayesian, proper):
+ *     1. Fit SE-kernel Gaussian Process to raw concentration measurements
+ *     2. Length-scale l optimised by marginal likelihood (grid search)
+ *     3. Analytical derivative posterior → μ'(t*), σ'(t*)
+ *     4. q_i = sign_i · μ'(t*) / Xv(t*)  with 95% CI = ±1.96 σ'(t*)/Xv
+ *
+ * The paper (§2.2) uses nested-sampling B-splines for the full posterior;
+ * the GP method is the closest practical Bayesian equivalent in-browser.
  */
 
 import type { NoisyMeasurement } from "./simulator";
+import { gpEstimateRate } from "./gp";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -231,8 +240,9 @@ void kernelSmooth;
  * @param measurements  Noisy concentration time-series
  * @param noise         Noise configuration
  * @param outputTimes   Dense time grid for smoothed output
- * @param bandwidth     Kernel bandwidth [days]  (default 1.5)
+ * @param bandwidth     Kernel bandwidth [days]  (default 1.5, only for "kernel" method)
  * @param bolusDay      Feed bolus days (for discontinuity correction)
+ * @param method        "kernel" (default) or "gp" (GP regression with SE kernel)
  */
 export function runMetRaC(
   measurements: NoisyMeasurement[],
@@ -240,7 +250,12 @@ export function runMetRaC(
   outputTimes: number[],
   bandwidth = 1.5,
   bolusDay: number[] = [],
+  method: "kernel" | "gp" = "kernel",
 ): SmoothedRate[] {
+  if (method === "gp") {
+    return runGPMetRaC(measurements, noise, outputTimes);
+  }
+
   const raw = estimateRawRates(measurements, noise, bolusDay);
   if (raw.length < 2) return [];
 
@@ -253,6 +268,56 @@ export function runMetRaC(
   const glu = smooth("q_Glu", "q_Glu_sd");
   const nh4 = smooth("q_NH4", "q_NH4_sd");
   const qp  = smooth("q_p",   "q_p_sd");
+
+  return outputTimes.map((t, i) => ({
+    t,
+    q_Glc: glc.mean[i], q_Glc_lo95: glc.lo95[i], q_Glc_hi95: glc.hi95[i],
+    q_Lac: lac.mean[i], q_Lac_lo95: lac.lo95[i], q_Lac_hi95: lac.hi95[i],
+    q_Gln: gln.mean[i], q_Gln_lo95: gln.lo95[i], q_Gln_hi95: gln.hi95[i],
+    q_Glu: glu.mean[i], q_Glu_lo95: glu.lo95[i], q_Glu_hi95: glu.hi95[i],
+    q_NH4: nh4.mean[i], q_NH4_lo95: nh4.lo95[i], q_NH4_hi95: nh4.hi95[i],
+    q_p:   qp.mean[i],  q_p_lo95:   qp.lo95[i],  q_p_hi95:   qp.hi95[i],
+  }));
+}
+
+// ── GP-based MetRaC pipeline ───────────────────────────────────────────────────
+
+/**
+ * GP implementation: fit SE-kernel GP to raw concentration measurements,
+ * then compute the analytical derivative posterior to get q values and CIs.
+ */
+function runGPMetRaC(
+  measurements: NoisyMeasurement[],
+  noise: MetRaCNoiseConfig,
+  outputTimes: number[],
+): SmoothedRate[] {
+  if (measurements.length < 3) return [];
+
+  const times    = measurements.map((m) => m.t);
+  const xvValues = measurements.map((m) => m.Xv);
+
+  const est = (
+    values: number[],
+    sn: number,
+    sign: number,
+  ) => gpEstimateRate(times, values, sn, outputTimes, times, xvValues, sign);
+
+  const glc = est(measurements.map((m) => m.Glc), noise.Glc_abs, -1);
+  const lac = est(measurements.map((m) => m.Lac), noise.Lac_abs, +1);
+  const gln = est(measurements.map((m) => m.Gln), noise.Gln_abs, -1);
+  const glu = est(measurements.map((m) => m.Glu), noise.Glu_abs, -1);
+  const nh4 = est(measurements.map((m) => m.NH4), noise.NH4_abs, +1);
+
+  // Product-specific rate (titer) — optional
+  const hasTit = measurements.some((m) => m.Tit !== undefined) && (noise.Tit_cv ?? 0) > 0;
+  const ZERO = new Array<number>(outputTimes.length).fill(0);
+  let qp = { mean: ZERO, lo95: ZERO, hi95: ZERO, learnedL: 1.5 };
+  if (hasTit) {
+    const titValues  = measurements.map((m) => m.Tit ?? 0);
+    const meanTit    = titValues.reduce((s, v) => s + v, 0) / titValues.length;
+    const titSn      = Math.max(1, meanTit) * (noise.Tit_cv ?? 0.08);
+    qp = gpEstimateRate(times, titValues, titSn, outputTimes, times, xvValues, +1);
+  }
 
   return outputTimes.map((t, i) => ({
     t,

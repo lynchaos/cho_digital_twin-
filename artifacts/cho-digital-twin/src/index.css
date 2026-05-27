@@ -1482,3 +1482,51 @@
 
 /* SVG canvas */
 .fba-svg { border-radius: 6px; }
+
+/* ── MetRaC: method toggle & badge ─────────────────────────────────────────── */
+.metrac-method-row {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
+}
+.metrac-method-btn {
+  flex: 1;
+  padding: 0.28rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 5px;
+  background: #f8fafc;
+  color: #475569;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.metrac-method-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+.metrac-method-btn.active {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  color: #fff;
+}
+.metrac-method-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.ctrl-section--dim { opacity: 0.45; pointer-events: none; }
+
+.metrac-method-badge {
+  display: inline-block;
+  margin-left: 0.45rem;
+  padding: 0.1rem 0.45rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  border-radius: 4px;
+  background: #e2e8f0;
+  color: #475569;
+  vertical-align: middle;
+  letter-spacing: 0.01em;
+}
+.metrac-method-badge.gp {
+  background: #1d4ed8;
+  color: #fff;
+}
