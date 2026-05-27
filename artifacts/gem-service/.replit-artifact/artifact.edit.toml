@@ -1,0 +1,16 @@
+kind = "api"
+previewPath = "/gem"
+title = "GEM Reduction API"
+version = "1.0.0"
+id = "gem-reduction-api"
+
+[[services]]
+localPort = 8082
+name = "GEM Reduction API"
+paths = ["/gem"]
+
+[services.development]
+run = "cd artifacts/gem-service && uvicorn main:app --host 0.0.0.0 --port 8082"
+
+[services.production.health.startup]
+path = "/gem/healthz"

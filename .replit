@@ -11,6 +11,23 @@ env = { "CI" = "true" }
 [workflows]
 runButton = "Project"
 
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "artifacts/gem-service: GEM Reduction API"
+
+[[workflows.workflow]]
+name = "artifacts/gem-service: GEM Reduction API"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd artifacts/gem-service && uvicorn main:app --host 0.0.0.0 --port 8082"
+
 [agent]
 stack = "PNPM_WORKSPACE"
 expertMode = true
@@ -26,6 +43,10 @@ externalPort = 8080
 [[ports]]
 localPort = 8081
 externalPort = 80
+
+[[ports]]
+localPort = 8082
+externalPort = 3001
 
 [[ports]]
 localPort = 24073

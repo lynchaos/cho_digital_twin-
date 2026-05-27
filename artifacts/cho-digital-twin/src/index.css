@@ -2016,6 +2016,332 @@
   margin-top: 0.05rem;
 }
 
+/* ── GEM Live Panel ────────────────────────────────────────────────────── */
+.gem-live-panel {
+  background: #f0f7ff;
+  border: 1.5px solid #bfdbfe;
+  border-radius: 10px;
+  padding: 1rem 1.2rem;
+  margin-bottom: 1.2rem;
+}
+.gem-live-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.75rem;
+}
+.gem-live-badge {
+  background: #1d4ed8;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  letter-spacing: 0.06em;
+}
+.gem-live-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #1e3a5f;
+}
+.gem-live-loading {
+  font-size: 0.78rem;
+  color: #64748b;
+  padding: 0.5rem 0;
+}
+.gem-live-error {
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.78rem;
+  color: #991b1b;
+  margin-top: 0.6rem;
+}
+.gem-load-btn {
+  background: #1d4ed8;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.35rem 0.9rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+  margin-bottom: 0.6rem;
+}
+.gem-load-btn:hover { background: #1e40af; }
+
+/* Model info strip */
+.gem-model-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+.gem-model-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #fff;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  padding: 0.25rem 0.6rem;
+  min-width: 68px;
+}
+.gem-model-val {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #1e3a5f;
+  line-height: 1.2;
+}
+.gem-model-lab {
+  font-size: 0.62rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.gem-model-id {
+  font-size: 0.7rem;
+  color: #475569;
+  font-family: monospace;
+  padding: 0.2rem 0.5rem;
+  background: #e2e8f0;
+  border-radius: 4px;
+}
+
+/* Controls */
+.gem-controls-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: flex-end;
+  margin-bottom: 0.6rem;
+}
+.gem-control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.gem-control-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.gem-select {
+  font-size: 0.78rem;
+  padding: 0.3rem 0.55rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: #1e293b;
+  min-width: 160px;
+}
+.gem-run-btn {
+  background: #059669;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.4rem 1.1rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  align-self: flex-end;
+}
+.gem-run-btn:hover:not(:disabled) { background: #047857; }
+.gem-run-btn:disabled, .gem-run-btn.gem-run-running {
+  background: #6b7280;
+  cursor: not-allowed;
+}
+
+/* Progress bar */
+.gem-progress-bar {
+  height: 4px;
+  background: #bfdbfe;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 0.6rem;
+}
+.gem-progress-fill {
+  height: 100%;
+  background: #1d4ed8;
+  width: 30%;
+  animation: gem-progress-anim 1.5s ease-in-out infinite;
+}
+@keyframes gem-progress-anim {
+  0%   { transform: translateX(-100%); width: 40%; }
+  50%  { transform: translateX(150%);  width: 60%; }
+  100% { transform: translateX(300%);  width: 40%; }
+}
+
+/* Results */
+.gem-results { margin-top: 0.75rem; }
+.gem-results-kpis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 0.75rem;
+}
+.gem-res-kpi {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #fff;
+  border: 1.5px solid #c7d2fe;
+  border-radius: 8px;
+  padding: 0.3rem 0.7rem;
+  min-width: 72px;
+}
+.gem-res-kpi-val {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #1e3a5f;
+  line-height: 1.2;
+}
+.gem-res-kpi-lab {
+  font-size: 0.62rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Step table */
+.gem-step-table-wrap { overflow-x: auto; margin-bottom: 0.75rem; }
+.gem-step-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.76rem;
+  color: #1e293b;
+}
+.gem-step-table th {
+  background: #e2e8f0;
+  padding: 0.35rem 0.5rem;
+  font-weight: 600;
+  text-align: left;
+  border-bottom: 2px solid #cbd5e1;
+}
+.gem-step-table td {
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: middle;
+}
+.gem-step-pill {
+  display: inline-block;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.72rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  min-width: 18px;
+  text-align: center;
+}
+.gem-diff {
+  margin-left: 0.3rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0.05rem 0.25rem;
+  border-radius: 3px;
+}
+.gem-diff-pos { background: #fef3c7; color: #92400e; }
+.gem-diff-neg { background: #dcfce7; color: #166534; }
+.gem-diff-zero { background: #f0fdf4; color: #16a34a; }
+
+/* Note chips in step table */
+.gem-step-note-cell { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.gem-note-chip {
+  font-size: 0.66rem;
+  padding: 0.1rem 0.35rem;
+  background: #e2e8f0;
+  border-radius: 3px;
+  color: #475569;
+  white-space: nowrap;
+}
+.gem-note-chip.gem-note-warn { background: #fef3c7; color: #92400e; }
+.gem-note-chip.gem-note-info { background: #dbeafe; color: #1e40af; }
+
+/* Waterfall chart */
+.gem-waterfall-wrap { margin-top: 0.25rem; }
+.gem-waterfall-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 0.3rem;
+}
+
+/* ── Live step progress during run ── */
+.gem-live-steps {
+  margin-top: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+}
+.gem-live-step-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.76rem;
+  color: #334155;
+}
+.gem-live-step-row.gem-live-step-pending {
+  opacity: 0.55;
+  font-style: italic;
+}
+.gem-live-step-name {
+  flex: 1;
+  font-weight: 500;
+}
+.gem-live-step-rxns {
+  color: #1d4ed8;
+  font-weight: 600;
+  min-width: 70px;
+  text-align: right;
+}
+.gem-live-step-time {
+  color: #64748b;
+  min-width: 40px;
+  text-align: right;
+}
+
+/* ── Results KPI strip ── */
+.gem-results { margin-top: 0.75rem; }
+.gem-results-kpis {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+.gem-res-kpi {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.4rem 0.8rem;
+  min-width: 80px;
+}
+.gem-res-kpi-val {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1.2;
+}
+.gem-res-kpi-val.gem-kpi-green { color: #15803d; }
+.gem-res-kpi-val.gem-kpi-red   { color: #dc2626; }
+.gem-res-kpi-lab {
+  font-size: 0.65rem;
+  color: #64748b;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
 /* ── About page update: new fw-model-new ── */
 .fw-model-new {
   border-color: #1d6fa5 !important;
