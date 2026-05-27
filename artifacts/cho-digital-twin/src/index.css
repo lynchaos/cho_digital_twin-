@@ -1307,3 +1307,178 @@
 }
 .reset-all-btn:hover { background: hsl(var(--destructive) / 0.15); }
 
+
+/* ═══════════════════════════════════════════════════════════════════════
+   PC-dFBA Page
+   ═══════════════════════════════════════════════════════════════════════ */
+.pcdfba-page {
+  padding: 1rem 1.25rem 2rem;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Header */
+.pcdfba-header {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.pcdfba-header-left { flex: 1; min-width: 260px; }
+.pcdfba-title { font-size: 1.15rem; font-weight: 700; color: #1e293b; margin: 0 0 0.3rem; }
+.pcdfba-subtitle { font-size: 0.78rem; color: #64748b; margin: 0; line-height: 1.5; max-width: 560px; }
+
+.pcdfba-alg-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.6rem 0.85rem;
+  min-width: 320px;
+  max-width: 440px;
+}
+.pcdfba-alg-title { font-size: 0.72rem; font-weight: 600; color: #475569; margin-bottom: 0.35rem; }
+.pcdfba-alg-code {
+  display: block;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.7rem;
+  color: #1e293b;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+/* Main two-column layout */
+.pcdfba-main {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.pcdfba-svg-col  { flex: 3; min-width: 380px; }
+.pcdfba-info-col { flex: 2; min-width: 280px; display: flex; flex-direction: column; gap: 0.5rem; }
+
+/* Cards */
+.pcdfba-card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+}
+.pcdfba-card-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 0.4rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.pcdfba-day-badge {
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.1rem 0.45rem;
+  border-radius: 99px;
+}
+
+/* Slider */
+.pcdfba-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+.pcdfba-slider {
+  flex: 1;
+  accent-color: #2563eb;
+  height: 4px;
+  cursor: pointer;
+}
+.pcdfba-slider-label { font-size: 0.7rem; color: #94a3b8; white-space: nowrap; }
+
+/* Flux groups */
+.pcdfba-flux-group { padding: 0.45rem 0.65rem; }
+.pcdfba-flux-group-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.25rem;
+}
+.pcdfba-flux-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.72rem;
+}
+.pcdfba-flux-table tr { border-bottom: 1px solid #f1f5f9; }
+.pcdfba-flux-table tr:last-child { border-bottom: none; }
+.pcdfba-rxn-label { font-weight: 600; padding: 0.18rem 0.3rem 0.18rem 0; width: 56px; }
+.pcdfba-rxn-val   { font-family: monospace; font-size: 0.7rem; color: #1e293b; width: 68px; }
+.pcdfba-rxn-unit  { color: #94a3b8; font-size: 0.65rem; width: 72px; }
+.pcdfba-rxn-desc  { color: #64748b; font-size: 0.65rem; }
+
+/* Status badge */
+.pcdfba-status-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.2rem 0.6rem;
+  border-radius: 99px;
+}
+.pcdfba-status-ok   { background: #dcfce7; color: #15803d; }
+.pcdfba-status-warn { background: #fef9c3; color: #a16207; }
+.pcdfba-warnings {
+  margin: 0.3rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.7rem;
+  color: #b45309;
+}
+.pcdfba-warnings li { margin-bottom: 0.1rem; }
+
+/* Time series & PC charts */
+.pcdfba-charts-row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.pcdfba-chart-card { flex: 1; min-width: 280px; }
+.pcdfba-chart-sub  { font-size: 0.7rem; color: #64748b; margin: 0 0 0.35rem; }
+
+/* PCA panel */
+.pcdfba-pca-card { flex: 1.2; }
+.pcdfba-pca-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 160px;
+  color: #94a3b8;
+  font-size: 0.8rem;
+}
+.pcdfba-pca-legend {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.3rem;
+}
+.pcdfba-pca-grad {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(to right, rgb(59,130,246), rgb(220,0,50));
+}
+.pcdfba-pca-leg-label { font-size: 0.68rem; color: #94a3b8; white-space: nowrap; }
+.pcdfba-small-note {
+  font-size: 0.68rem;
+  font-weight: 400;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+}
+
+/* SVG canvas */
+.fba-svg { border-radius: 6px; }

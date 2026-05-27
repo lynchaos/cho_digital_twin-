@@ -2,3 +2,4 @@
 - [CHO Digital Twin — μ_net nutrient coupling](cho-nutrient-coupling.md) — sigmoid-only μ_net gives unphysical VCD (42+ Mc/mL); Monod nutrient coupling added as NN substitute, brings VCD to realistic 2–5 Mc/mL.
 - [CHO Digital Twin — NN surrogate strategy](nn-import-strategy.md) — surrogate NN in neural-net.ts is standalone math; calibration teacher fn passed as parameter; export wrappers live in growth-rate.ts to avoid circular imports.
 - [CHO Digital Twin — MetRaC bolus discontinuity](metrac-bolus.md) — apply 10× σ inflation for finite-difference intervals spanning a feed bolus; bolus days passed from page; avoids large artefact rates at bolus transitions.
+- [CHO Digital Twin — PC-dFBA analytical FBA](pcdfba-fba-derivation.md) — condensed 10-met/16-rxn network; EX_GLU sign = uptake-positive (+1 in S matrix, matches q_Glu in TimePoint); PDH = 2·EX_GLC − EX_LAC + GLUD.

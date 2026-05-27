@@ -1,36 +1,49 @@
-# [Project name]
+# CHO Digital Twin
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Interactive replication of the Richelle et al. (2025) hybrid CHO cell culture modeling framework (bioRxiv 2025.11.24.690194) as a React web app.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- `pnpm --filter @workspace/cho-digital-twin run dev` — run the main app (uses `PORT` env var)
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
 
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- Frontend: React 19 + Vite 7 + Tailwind CSS + Recharts
+- Routing: Wouter
+- No backend (pure client-side computation)
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/cho-digital-twin/src/` — main app source
+  - `pages/` — one file per tab (SimulatorPage, EquationsPage, ParametersPage, MetRaCPage, SweepPage, PcdFBAPage)
+  - `lib/models.ts` — all ODE rate equations (Eqs. 1–26 + Gln/Glu transamination)
+  - `lib/simulator.ts` — ODE integrator (RK45-like), defaultConfig, runSimulation
+  - `lib/cho-network.ts` — condensed 10-met/16-rxn CHO S matrix + SVG node positions
+  - `lib/fba-solver.ts` — analytical FBA solver + PCA (power iteration)
+  - `lib/growth-rate.ts` — μ_net model switcher (Sigmoid / Monod proxy / Surrogate NN)
+  - `lib/neural-net.ts` — surrogate NN (standalone math)
+  - `lib/parameters.ts` — Table 1 parameters (all exact from paper)
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- All ODE rate equations are exact replications of Eqs. 8–26 from the paper. Table 1 parameters match to published values.
+- μ_net has three selectable modes: Sigmoid (exact paper Eq. 14), Monod-proxy (realistic VCD), Surrogate NN (auto-calibrated from Monod proxy).
+- PC-dFBA uses an analytical mass-balance solver (no LP library needed) — the condensed 10-metabolite network has only 1 free variable (ME/PCX split), resolved by parsimony.
+- EX_GLU sign convention: uptake-positive (matches q_Glu in TimePoint which records consumption rate). See memory/pcdfba-fba-derivation.md.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+Seven tabs:
+1. **Simulator** — interactive fed-batch ODE simulation with all controls from the paper
+2. **Equations** — rendered LaTeX of all paper equations (Eqs. 1–26 + PC-dFBA Eqs. 27–33)
+3. **Parameters** — Table 1 interactive editor with paper default values
+4. **MetRaC** — metabolic rate calculator with Bayesian CIs and q_p chart
+5. **Sweep** — parameter sensitivity sweep across any model parameter
+6. **PC-dFBA** — intracellular flux analysis: SVG flux map + time series + PC trajectory analysis
+7. **About** — replication status table
 
 ## User preferences
 
@@ -38,7 +51,10 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Do NOT run `pnpm dev` at workspace root — it has no dev script; use the workflow.
+- `pnpm run typecheck` (not `build`) for local type-checking of artifacts.
+- The surrogate NN needs explicit calibration call in growth-rate.ts; do not import training logic in neural-net.ts (circular import risk).
+- EX_GLU in cho-network.ts S matrix has GLU row = +1 (uptake-positive); do NOT change to -1.
 
 ## Pointers
 

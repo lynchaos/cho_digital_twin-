@@ -5,8 +5,9 @@ import EquationsPage from "@/pages/EquationsPage";
 import ParametersPage from "@/pages/ParametersPage";
 import MetRaCPage from "@/pages/MetRaCPage";
 import SweepPage from "@/pages/SweepPage";
+import PcdFBAPage from "@/pages/PcdFBAPage";
 
-type Tab = "simulator" | "equations" | "parameters" | "metrac" | "sweep" | "about";
+type Tab = "simulator" | "equations" | "parameters" | "metrac" | "sweep" | "pcdfba" | "about";
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: "simulator",  label: "Simulator",  icon: "⚙" },
@@ -14,6 +15,7 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: "parameters", label: "Parameters", icon: "⊞" },
   { id: "metrac",     label: "MetRaC",     icon: "≈" },
   { id: "sweep",      label: "Sweep",      icon: "⊹" },
+  { id: "pcdfba",     label: "PC-dFBA",    icon: "⬡" },
   { id: "about",      label: "About",      icon: "ℹ" },
 ];
 
@@ -58,7 +60,7 @@ function AboutPage() {
           <tr><td>MetRaC rate estimation + q_p</td><td>§2.2</td>
             <td className="status-partial">⚠ Simplified: finite-diff + kernel-smoothed Bayesian CI; includes q_p estimation from noisy titer (no nested sampling)</td></tr>
           <tr><td>PC-dFBA hybrid LP</td><td>Eqs. 27–33</td>
-            <td className="status-no">✗ Needs genome-scale CHO model (iCHO) + LP solver</td></tr>
+            <td className="status-partial">⚠ Condensed 10-met/16-rxn network; analytical mass-balance solver; PC analysis from flux trajectories (iCHO2441 + full NN loadings not available)</td></tr>
         </tbody>
       </table>
 
@@ -187,6 +189,7 @@ export default function App() {
         {activeTab === "parameters" && <ParametersPage />}
         {activeTab === "metrac"     && <MetRaCPage />}
         {activeTab === "sweep"      && <SweepPage />}
+        {activeTab === "pcdfba"     && <PcdFBAPage />}
         {activeTab === "about"      && <AboutPage />}
       </div>
     </div>
