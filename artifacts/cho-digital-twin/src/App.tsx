@@ -43,16 +43,20 @@ function AboutPage() {
             <td className="status-yes">✓ Exact Table 1 parameters; B_max cap added</td></tr>
           <tr><td>ODE FLEX metabolite model</td><td>Eqs. 15–26</td>
             <td className="status-yes">✓ Exact Table 1 parameters</td></tr>
+          <tr><td>Gln chemical degradation</td><td>Eqs. 17, 18</td>
+            <td className="status-yes">✓ k_Gln_deg = 0.006 day⁻¹ (Table 1); NH₄⁺ co-production</td></tr>
+          <tr><td>Gln → Glu transamination coupling</td><td>Eqs. 17–18, 24–25</td>
+            <td className="status-yes">✓ Y_Glu_Gln = 0.67 (Table 1); Glu rise on Gln depletion</td></tr>
           <tr><td>RK4 integrator</td><td>—</td>
             <td className="status-yes">✓ dt = 0.005 days</td></tr>
           <tr><td>Fed-batch mass balance with bolus feeds</td><td>Eq. 34</td>
-            <td className="status-yes">✓ Bolus feeding with exact volume mixing</td></tr>
+            <td className="status-yes">✓ Editable bolus schedule; exact volume mixing</td></tr>
           <tr><td>Luedeking-Piret product model</td><td>§2.4 extension</td>
             <td className="status-yes">✓ dTit/dt = (α·μ_net + β)·Xv — growth + non-growth associated</td></tr>
-          <tr><td>Nutrient-coupled growth rate (§2.3 NN substitute)</td><td>§2.3 proxy</td>
-            <td className="status-partial">⚠ Monod × sigmoid (NN weights need 23-batch dataset)</td></tr>
-          <tr><td>MetRaC rate estimation</td><td>§2.2</td>
-            <td className="status-partial">⚠ Simplified: finite-diff + kernel-smoothed Bayesian CI (no nested sampling)</td></tr>
+          <tr><td>μ_net growth rate (§2.3)</td><td>§2.3</td>
+            <td className="status-partial">⚠ Three modes: Sigmoid · Monod proxy · Surrogate NN (auto-calibrated from Monod proxy; full NN needs proprietary 23-batch dataset)</td></tr>
+          <tr><td>MetRaC rate estimation + q_p</td><td>§2.2</td>
+            <td className="status-partial">⚠ Simplified: finite-diff + kernel-smoothed Bayesian CI; includes q_p estimation from noisy titer (no nested sampling)</td></tr>
           <tr><td>PC-dFBA hybrid LP</td><td>Eqs. 27–33</td>
             <td className="status-no">✗ Needs genome-scale CHO model (iCHO) + LP solver</td></tr>
         </tbody>
@@ -83,27 +87,50 @@ function AboutPage() {
       <h2>Implementation notes</h2>
       <ul className="about-list">
         <li>
-          <strong>B_max cap (new):</strong> Biomaterial B is now capped at B_max (default 500) inside deathRate(),
+          <strong>Gln degradation &amp; transamination:</strong> Glutamine degrades abiotically at k_Gln_deg = 0.006 day⁻¹
+          (Table 1, Eqs. 17–18), producing NH₄⁺. The Y_Glu_Gln = 0.67 stoichiometric coupling drives Glu accumulation
+          as Gln depletes, clearly visible in the Gln/Glu chart after day 8.
+        </li>
+        <li>
+          <strong>B_max cap:</strong> Biomaterial B is capped at B_max (default 500) inside deathRate(),
           preventing the kd1·B term from growing unboundedly and producing unrealistic death rates after day 10.
         </li>
         <li>
-          <strong>Luedeking-Piret product model (new):</strong> Product titer uses
-          dTit/dt = (q_p_growth·μ_net + q_p)·Xv, distinguishing growth-associated (α = q_p_growth)
-          from non-growth-associated (β = q_p) productivity.
+          <strong>Luedeking-Piret product model:</strong> dTit/dt = (α·μ_net + β)·Xv, distinguishing
+          growth-associated (α = q_p_growth) from non-growth-associated (β = q_p) productivity.
+          The product-specific rate q_p is also tracked as a state in simulator output for MetRaC comparison.
         </li>
         <li>
-          <strong>Nutrient-coupled growth (new):</strong> μ_net_eff = μ_sigmoid(t) × Monod(Glc) × Monod(Gln)
-          × Inhibition(Lac) × Inhibition(NH4). This replaces the §2.3 NN for open exploration and
-          gives biologically realistic VCD (10–20 Mc/mL range) without the training data.
+          <strong>Three μ_net modes:</strong> (1) <em>Sigmoid</em> — bare Gaussian-sum baseline, no nutrient feedback;
+          (2) <em>Monod proxy</em> — μ_sigmoid × Monod(Glc) × Monod(Gln) × Inhibition(Lac) × Inhibition(NH₄⁺),
+          gives biologically realistic VCD without training data;
+          (3) <em>Surrogate NN</em> — MLP auto-calibrated from the Monod proxy teacher signal, demonstrating
+          the §2.3 architecture.
         </li>
         <li>
-          <strong>MetRaC tab (new):</strong> Demonstrates the full MetRaC pipeline — virtual
-          measurements from the ODE + configurable noise → finite-difference rates → kernel-smoothed
-          posterior with 95% credible intervals.
+          <strong>Feed schedule editor:</strong> The Simulator sidebar includes an editable bolus table —
+          add, remove, or reset glucose/glutamine feeds and observe the effect on metabolite trajectories in real time.
         </li>
         <li>
-          <strong>CSV export:</strong> Click the ↓ CSV button in the Simulator after any run
-          to download all state variables and specific rates at every output step.
+          <strong>Reference run:</strong> Click <em>📌 Set Reference</em> to pin the current run as a ghost
+          overlay on all charts; change parameters and compare side-by-side.
+        </li>
+        <li>
+          <strong>Parameter sweep:</strong> The Sweep tab scans any single Table 1 parameter across a range
+          and plots a chosen output metric (peak VCD, final titer, etc.) against it — useful for sensitivity analysis.
+        </li>
+        <li>
+          <strong>MetRaC q_p estimation:</strong> Enable Titer CV &gt; 0 in the MetRaC noise panel to reveal
+          the q_p rate chart — MetRaC estimates the product-specific rate from noisy titer measurements
+          and overlays the Luedeking-Piret ODE truth.
+        </li>
+        <li>
+          <strong>JSON export / import:</strong> Use the Export/Import buttons at the bottom of the Simulator
+          sidebar to serialise the full parameter and bolus state to clipboard (JSON), then restore it later.
+        </li>
+        <li>
+          <strong>CSV export:</strong> Click ↓ CSV in the Simulator to download all state variables
+          and specific rates at every output step.
         </li>
         <li><strong>Overflow metabolism:</strong> Aerobic lactate production when glucose uptake exceeds oxidative capacity (Eqs. 21–23)</li>
         <li><strong>Lactate switch:</strong> Cells re-consume lactate when glucose is limiting (Eq. 22)</li>
