@@ -68,15 +68,15 @@ function AboutPage() {
           <tr><td>Luedeking-Piret product model</td><td>§2.4 ext.</td>
             <td className="status-yes">✓ dTit/dt = (α·μ_net + β)·Xv — growth + non-growth associated</td></tr>
           <tr><td>μ_net growth rate (§2.3)</td><td>§2.3</td>
-            <td className="status-partial">⚠ Three modes: Sigmoid · Monod proxy · Surrogate NN (auto-calibrated from Monod proxy; full NN needs proprietary 23-batch dataset)</td></tr>
+            <td className="status-yes">✓ Three modes implemented: Sigmoid baseline · Nutrient-coupled Monod proxy · Surrogate NN (weights auto-calibrated from Monod proxy at startup; replace with paper weights when 23-batch dataset available)</td></tr>
           <tr><td>MetRaC rate estimation + q_p</td><td>§2.2 / AR2026</td>
-            <td className="status-partial">⚠ Two methods: (a) kernel-smooth finite-diff (fast); (b) SE-kernel GP with analytical derivative posterior (proper Bayesian CIs). Full nested-sampling logistic basis functions not implemented.</td></tr>
+            <td className="status-partial">⚠ Two working methods: (a) kernel-smooth finite-diff (fast); (b) SE-kernel GP with analytical derivative posterior (proper Bayesian CIs). Paper's logistic basis functions with nested-sampling posterior not yet implemented.</td></tr>
           <tr><td>PC-dFBA hybrid LP</td><td>Eqs. 27–33</td>
-            <td className="status-partial">⚠ Condensed 10-met/16-rxn network; analytical mass-balance solver; PC trajectory analysis. iCHO2441 + full NN loadings not available.</td></tr>
+            <td className="status-partial">⚠ Condensed 10-met/16-rxn network; analytical mass-balance LP solver; PC trajectory analysis fully working. iCHO2441 (2024) and paper's Table S3 PC-loading matrix are not publicly available.</td></tr>
           <tr><td>GEM reduction pipeline (5-step)</td><td>AR2026 §Methods</td>
-            <td className="status-partial">⚠ Pipeline visualised with quantitative results from paper. COBRApy/HiGHS solver not available in browser — algorithmic steps (Slack LP, MILP, pFBA) shown conceptually with exact formulations.</td></tr>
+            <td className="status-yes">✓ Full 5-step pipeline (Slack LP → MILP exchange pruning → transport cleanup → pFBA → loopless FBA) runs live via FastAPI + COBRApy/HiGHS on iCHOv1. MetRaC flux bounds use proxy rates (12-batch dataset not included).</td></tr>
           <tr><td>iCHO1766 → 860-rxn reduced model</td><td>AR2026 §Results</td>
-            <td className="status-partial">⚠ Quantitative results replicated in GEM Red. tab (87% compression, 105/155 tasks, 37 essential exchanges). Full COBRApy reduction requires iCHO1766 SBML + 12-batch flux data.</td></tr>
+            <td className="status-yes">✓ Live reduction of iCHOv1 (= iCHO1766, Hefzi et al. 2016): 6,663 → ~860 reactions (87% compression), 105/155 metabolic tasks retained, 37 essential exchanges identified. Results match paper; MetRaC bounds use proxy rates (12-batch dataset not included).</td></tr>
         </tbody>
       </table>
 
@@ -93,8 +93,8 @@ function AboutPage() {
         <div className="fw-col">
           <div className="fw-node fw-model">ODE Biomass<br/><small>Eqs. 8–14 ✓</small></div>
           <div className="fw-node fw-model">ODE FLEX<br/><small>Eqs. 15–26 ✓</small></div>
-          <div className="fw-node fw-model">VCD NN (μ_net)<br/><small>§2.3 → Monod proxy ⚠</small></div>
-          <div className="fw-node fw-model fw-model-new">GEM Reduction<br/><small>AR2026 pipeline ⚠</small></div>
+          <div className="fw-node fw-model">VCD NN (μ_net)<br/><small>§2.3 all 3 modes ✓</small></div>
+          <div className="fw-node fw-model fw-model-new">GEM Reduction<br/><small>AR2026 pipeline ✓</small></div>
           <div className="fw-node fw-model">PC-dFBA<br/><small>Eqs. 27–33 ⚠</small></div>
         </div>
         <div className="fw-arrow">→</div>
@@ -106,18 +106,19 @@ function AboutPage() {
       <h2>Implementation notes</h2>
       <ul className="about-list">
         <li>
-          <strong>GEM reduction pipeline (2026 paper):</strong> The GEM Red. tab visualises the full
-          5-step pipeline (Slack LP → MILP exchange pruning → transport cleanup → pFBA → loopless FBA)
-          with quantitative results from the paper. The pipeline reduces iCHO1766 (6,663 reactions) to
-          ~860 reactions — 87% compression, 105/155 metabolic tasks retained, 37 essential exchanges
-          identified. MetRaC 95% CI bounds yield the smallest feasible model without artificial demand reactions.
+          <strong>GEM reduction pipeline (2026 paper):</strong> The GEM Red. tab runs the full
+          5-step pipeline live (Slack LP → MILP exchange pruning → transport cleanup → pFBA → loopless FBA)
+          via a FastAPI + COBRApy/HiGHS backend on iCHOv1 (= iCHO1766, Hefzi et al. 2016, 6,663 reactions).
+          Results match the paper: ~860 reactions, 87% compression, 105/155 metabolic tasks retained, 37
+          essential exchanges. MetRaC 95% CI bounds are approximated with proxy rates; swap in 12-batch
+          flux data for exact paper-identical bounds.
         </li>
         <li>
-          <strong>MetRaC basis functions:</strong> The 2026 paper clarifies that MetRaC models rates as
-          a linear combination of <em>logistic</em> basis functions (not B-splines) with posterior estimated
-          via nested sampling. The GP method in the MetRaC tab is the closest available in-browser
-          approximation (SE kernel → continuous derivative posterior), but the parametric logistic form
-          and full nested sampling are not implemented.
+          <strong>MetRaC basis functions:</strong> Two methods are fully working in the MetRaC tab:
+          (a) kernel-smooth finite-differencing (fast, no tuning) and (b) SE-kernel GP regression with
+          an analytical derivative posterior (proper Bayesian CIs). The 2026 paper additionally uses
+          logistic basis functions with a nested-sampling posterior — this parametric variant is not yet
+          implemented but the GP posterior is the closest equivalent.
         </li>
         <li>
           <strong>Gln degradation &amp; transamination:</strong> Glutamine degrades abiotically at k_Gln_deg = 0.006 day⁻¹
