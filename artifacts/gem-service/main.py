@@ -19,6 +19,7 @@ from pathlib import Path
 from threading import Lock
 from typing import Any
 
+import numpy as np
 import cobra
 from cobra import Model, Reaction
 from cobra.flux_analysis import pfba
@@ -51,6 +52,24 @@ _jobs_lock = Lock()
 MODEL_PATH = Path(__file__).parent / "models" / "iCHOv1.json"
 _base_model: Model | None = None
 _base_model_pickle: bytes | None = None
+
+# Cached reduced model (stored after a successful GEM reduction pipeline run)
+_reduced_model_pickle: bytes | None = None
+_reduced_model_lock = Lock()
+
+
+def _store_reduced_model(m: Model) -> None:
+    global _reduced_model_pickle
+    with _reduced_model_lock:
+        _reduced_model_pickle = pickle.dumps(m)
+        log.info("Cached reduced model (%d rxns)", len(m.reactions))
+
+
+def _get_reduced_model() -> Model | None:
+    with _reduced_model_lock:
+        if _reduced_model_pickle is None:
+            return None
+        return pickle.loads(_reduced_model_pickle)
 
 
 def get_base_model() -> Model:
@@ -314,6 +333,7 @@ def _run_pipeline_sync(job_id: str, ci_factor: float, max_step: int, quick_mode:
 
         final = model_summary(m)
         reduction_pct = round(100 * (1 - final["reactions"] / initial_stats["reactions"]), 1)
+        _store_reduced_model(m)  # cache for pcdfba sampling
         _update({
             "status": "done",
             "final": final,
@@ -326,6 +346,115 @@ def _run_pipeline_sync(job_id: str, ci_factor: float, max_step: int, quick_mode:
     except Exception as exc:
         log.exception("Pipeline job %s failed", job_id)
         _update({"status": "error", "error": str(exc), "duration_s": round(time.time() - t_total, 1)})
+
+
+# ── PC-dFBA pFBA sampling ─────────────────────────────────────────────────────
+# Sample pFBA optima across a physiological grid of Glc/Gln exchange rates,
+# then compute PCA to get GEM-derived PC loadings for the PC-dFBA tab.
+
+PCDFBA_GLC_GRID = [0.1, 0.3, 0.6, 1.0, 1.5, 2.0]   # mmol/(gDW·h), Glc uptake
+PCDFBA_GLN_GRID = [0.02, 0.05, 0.1, 0.2, 0.4]        # mmol/(gDW·h), Gln uptake
+
+
+def _run_pcdfba_sampling_sync(job_id: str) -> None:
+    """Sample pFBA over a Glc×Gln grid on the reduced model, run PCA, store result."""
+    def _update(patch: dict):
+        with _jobs_lock:
+            _jobs[job_id].update(patch)
+
+    _update({"status": "running", "started_at": time.time()})
+    t0 = time.time()
+
+    try:
+        m = _get_reduced_model()
+        model_source = "reduced"
+        if m is None:
+            log.info("No reduced model cached — using base model for pcdfba sampling")
+            m = get_base_model()
+            m, _ = step0_setup(m)
+            model_source = "base (unreduced)"
+
+        # Locate key exchange reactions
+        glc_rxn = next(
+            (r for r in m.exchanges if r.id.startswith("EX_glc")), None
+        )
+        gln_rxn = next(
+            (r for r in m.exchanges if r.id.startswith("EX_gln")), None
+        )
+        if glc_rxn is None or gln_rxn is None:
+            _update({"status": "error",
+                     "error": "Could not find EX_glc / EX_gln exchange reactions"})
+            return
+
+        # Fixed reaction order — all non-exchange reactions in the model
+        rxn_order = [r.id for r in m.reactions if r not in m.exchanges]
+
+        flux_matrix: list[list[float]] = []
+        conditions: list[dict] = []
+
+        for q_glc in PCDFBA_GLC_GRID:
+            for q_gln in PCDFBA_GLN_GRID:
+                with m:
+                    glc_rxn.lower_bound = -abs(q_glc)
+                    gln_rxn.lower_bound = -abs(q_gln)
+                    try:
+                        sol = pfba(m)
+                        if sol.status != "optimal":
+                            continue
+                    except Exception:
+                        continue
+                fluxes = [float(sol.fluxes.get(rid, 0.0)) for rid in rxn_order]
+                flux_matrix.append(fluxes)
+                conditions.append({"q_glc": q_glc, "q_gln": q_gln})
+
+        if len(flux_matrix) < 4:
+            _update({"status": "error",
+                     "error": f"Only {len(flux_matrix)} feasible conditions — PCA requires ≥4"})
+            return
+
+        # PCA via SVD
+        X = np.array(flux_matrix)          # (n_cond, n_rxns)
+        X_mean = X.mean(axis=0)
+        X_c = X - X_mean
+
+        # Filter zero-variance reactions before SVD
+        keep_mask = X_c.var(axis=0) > 1e-9
+        X_f = X_c[:, keep_mask]
+        rxn_order_f = [rid for rid, k in zip(rxn_order, keep_mask) if k]
+
+        U, S, Vt = np.linalg.svd(X_f, full_matrices=False)
+        scores = (U * S).tolist()             # (n_cond, min(n_cond, n_rxns_f))
+        var_explained = (
+            (S[:3] ** 2 / (S ** 2).sum()).tolist() if len(S) > 0 else []
+        )
+
+        def top_loadings(pc_idx: int, n_top: int = 20) -> list[dict]:
+            if pc_idx >= len(Vt):
+                return []
+            loads = Vt[pc_idx]
+            idx = np.argsort(np.abs(loads))[::-1][:n_top]
+            return [
+                {"rxn": rxn_order_f[int(i)], "loading": float(loads[i])}
+                for i in idx
+            ]
+
+        _update({
+            "status": "done",
+            "n_conditions": len(flux_matrix),
+            "n_reactions": len(rxn_order_f),
+            "model_source": model_source,
+            "var_explained": var_explained[:3],
+            "scores": [s[:3] for s in scores],
+            "conditions": conditions,
+            "pc1_loadings": top_loadings(0),
+            "pc2_loadings": top_loadings(1),
+            "duration_s": round(time.time() - t0, 1),
+        })
+
+    except Exception as exc:
+        log.exception("PC-dFBA sampling job %s failed", job_id)
+        _update({"status": "error", "error": str(exc),
+                 "duration_s": round(time.time() - t0, 1)})
 
 
 # ── API routes ─────────────────────────────────────────────────────────────────
@@ -400,6 +529,17 @@ async def delete_job(job_id: str):
     with _jobs_lock:
         _jobs.pop(job_id, None)
     return {"ok": True}
+
+
+@app.post("/gem/pcdfba/run-sampling")
+async def start_pcdfba_sampling():
+    """Sample pFBA over Glc×Gln grid and compute PCA. Returns job_id to poll."""
+    job_id = "pcd_" + str(uuid.uuid4())[:8]
+    with _jobs_lock:
+        _jobs[job_id] = {"job_id": job_id, "status": "queued"}
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(_executor, _run_pcdfba_sampling_sync, job_id)
+    return {"job_id": job_id, "status": "queued"}
 
 
 # ── Startup: pre-load model ────────────────────────────────────────────────────

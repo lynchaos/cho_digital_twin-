@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { runSimulation, defaultConfig } from "@/lib/simulator";
 import { runFBA, computeFluxPCA, type FBAResult, type FBAFluxes } from "@/lib/fba-solver";
 import { SVG_METABOLITES, type RxnId } from "@/lib/cho-network";
@@ -224,6 +224,68 @@ export default function PcdFBAPage() {
     rxn, pc1:+(pca.loadings[0][i]??0).toFixed(4), pc2:+(pca.loadings[1][i]??0).toFixed(4),
   })),[pca]);
 
+  // ── GEM-derived PC loadings (from gem-service pFBA sampling) ─────────────
+  interface GEMPCAResult {
+    n_conditions: number;
+    n_reactions: number;
+    model_source: string;
+    var_explained: number[];
+    scores: number[][];
+    conditions: { q_glc: number; q_gln: number }[];
+    pc1_loadings: { rxn: string; loading: number }[];
+    pc2_loadings: { rxn: string; loading: number }[];
+    duration_s?: number;
+  }
+  const PCDFBA_GLC_GRID_SIZE = 6;
+  const PCDFBA_GLN_GRID_SIZE = 5;
+  type GemStatus = "idle" | "loading" | "done" | "error";
+  const [gemStatus, setGemStatus] = useState<GemStatus>("idle");
+  const [gemData, setGemData]     = useState<GEMPCAResult | null>(null);
+  const [gemError, setGemError]   = useState<string>("");
+
+  const fetchGEMLoadings = useCallback(async () => {
+    setGemStatus("loading");
+    setGemError("");
+    try {
+      const res = await fetch("/gem/pcdfba/run-sampling", { method: "POST" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const { job_id } = await res.json() as { job_id: string };
+      const poll = async (): Promise<void> => {
+        const r = await fetch(`/gem/job/${job_id}`);
+        const data = await r.json() as { status: string; error?: string } & GEMPCAResult;
+        if (data.status === "done") {
+          setGemData(data);
+          setGemStatus("done");
+        } else if (data.status === "error") {
+          setGemError(data.error ?? "Unknown error");
+          setGemStatus("error");
+        } else {
+          setTimeout(poll, 2500);
+        }
+      };
+      setTimeout(poll, 1500);
+    } catch (e) {
+      setGemError(e instanceof Error ? e.message : String(e));
+      setGemStatus("error");
+    }
+  }, []);
+
+  const gemScatterData = gemData
+    ? gemData.scores.map((s, i) => ({
+        pc1: +(s[0] ?? 0).toFixed(4),
+        pc2: +(s[1] ?? 0).toFixed(4),
+        q_glc: gemData.conditions[i]?.q_glc ?? 0,
+        q_gln: gemData.conditions[i]?.q_gln ?? 0,
+      }))
+    : [];
+
+  const GLC_VALUES = [...new Set(gemData?.conditions.map((c) => c.q_glc) ?? [])];
+  const GLC_COLORS = ["#2563eb","#16a34a","#d97706","#dc2626","#7c3aed","#0891b2"];
+  const glcColorMap = Object.fromEntries(GLC_VALUES.map((v, i) => [v, GLC_COLORS[i % GLC_COLORS.length]]));
+
+  const gemPC1Data = (gemData?.pc1_loadings ?? []).map((d) => ({ rxn: d.rxn, loading: d.loading }));
+  const gemPC2Data = (gemData?.pc2_loadings ?? []).map((d) => ({ rxn: d.rxn, loading: d.loading }));
+
   return (
     <div className="pcdfba-page">
 
@@ -404,6 +466,115 @@ export default function PcdFBAPage() {
             </LineChart>
           </ResponsiveContainer>
         </div>
+      </div>
+
+      {/* ── Full GEM PCA via pFBA sampling ──────────────────────────────────────── */}
+      <div className="pcdfba-section" style={{marginTop:"2rem"}}>
+        <div className="pcdfba-section-title" style={{marginBottom:"0.75rem"}}>
+          Full GEM Principal Component Analysis
+          <span className="pcdfba-subsection-note" style={{marginLeft:"0.75rem",fontSize:"0.78rem",fontWeight:400,color:"#64748b"}}>
+            iCHOv1 (6 663 rxns → ~860 after reduction)
+          </span>
+        </div>
+        <p className="pcdfba-chart-sub" style={{marginBottom:"0.75rem"}}>
+          Sample pFBA optima across a 6×5 Glc×Gln physiological grid
+          (30 conditions) on the GEM-reduced model, then compute PCA via SVD.
+          Requires the GEM service to be running and a reduction to have been
+          completed (GEM Reduction tab). Runs in ~30s.
+        </p>
+        <div style={{display:"flex",gap:"0.75rem",alignItems:"center",marginBottom:"1rem"}}>
+          <button
+            className="run-btn"
+            onClick={fetchGEMLoadings}
+            disabled={gemStatus === "loading"}
+            style={{padding:"0.4rem 1.1rem",fontSize:"0.85rem"}}>
+            {gemStatus === "loading" ? "Sampling…" : "↺ Fetch GEM Loadings"}
+          </button>
+          {gemStatus === "done" && gemData && (
+            <span style={{fontSize:"0.8rem",color:"#16a34a"}}>
+              ✓ {gemData.n_conditions} conditions · {gemData.n_reactions.toLocaleString()} reactions · {gemData.model_source} · {gemData.duration_s}s
+            </span>
+          )}
+          {gemStatus === "error" && (
+            <span style={{fontSize:"0.8rem",color:"#dc2626"}}>
+              ⚠ {gemError || "GEM service unavailable. Start gem-service and run a pipeline first."}
+            </span>
+          )}
+        </div>
+
+        {gemStatus === "loading" && (
+          <div style={{color:"#64748b",fontSize:"0.85rem",padding:"1rem 0"}}>
+            Running pFBA on {PCDFBA_GLC_GRID_SIZE}×{PCDFBA_GLN_GRID_SIZE} conditions… this takes ~30s.
+          </div>
+        )}
+
+        {gemStatus === "done" && gemData && (
+          <div className="pcdfba-charts-grid">
+            <div className="pcdfba-card">
+              <div className="pcdfba-card-title">GEM PCA Score Plot (PC1 vs PC2)</div>
+              <p className="pcdfba-chart-sub">
+                Variance explained: PC1 {(((gemData.var_explained[0]??0)*100)).toFixed(1)}%,
+                PC2 {(((gemData.var_explained[1]??0)*100)).toFixed(1)}%.
+                Each dot = one Glc/Gln condition; color = Glc uptake rate.
+              </p>
+              <ResponsiveContainer width="100%" height={220}>
+                <ScatterChart margin={{top:8,right:20,left:-15,bottom:8}}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/>
+                  <XAxis dataKey="pc1" name="PC1" tick={{fontSize:9}} label={{value:"PC1",position:"insideBottom",offset:-4,fontSize:10}}/>
+                  <YAxis dataKey="pc2" name="PC2" tick={{fontSize:9}} label={{value:"PC2",angle:-90,position:"insideLeft",offset:12,fontSize:10}}/>
+                  <Tooltip
+                    formatter={(_v: unknown, name: string, props: { payload?: { q_glc: number; q_gln: number } }) => [
+                      typeof _v === 'number' ? _v.toFixed(4) : String(_v),
+                      `${name} (Glc=${props.payload?.q_glc ?? ""}, Gln=${props.payload?.q_gln ?? ""})`
+                    ]}
+                  />
+                  <Scatter data={gemScatterData} name="Condition">
+                    {gemScatterData.map((d, idx) => (
+                      <Cell key={idx} fill={glcColorMap[d.q_glc] ?? "#94a3b8"} opacity={0.85}/>
+                    ))}
+                  </Scatter>
+                </ScatterChart>
+              </ResponsiveContainer>
+              <div style={{fontSize:"0.72rem",color:"#64748b",marginTop:"0.25rem"}}>
+                Dot colors by q_Glc: 
+                {GLC_VALUES.map((v, i) => (
+                  <span key={v} style={{marginRight:"0.5rem"}}>
+                    <span style={{display:"inline-block",width:8,height:8,borderRadius:"50%",background:GLC_COLORS[i % GLC_COLORS.length],marginRight:2}}/>
+                    {v}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="pcdfba-card">
+              <div className="pcdfba-card-title">Top PC1 Reaction Loadings</div>
+              <p className="pcdfba-chart-sub">Top 20 reactions by |loading| for PC1.</p>
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={gemPC1Data} margin={{top:4,right:10,left:-10,bottom:48}}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/>
+                  <XAxis dataKey="rxn" tick={{fontSize:7}} angle={-45} textAnchor="end" interval={0}/>
+                  <YAxis tick={{fontSize:9}}/>
+                  <Tooltip/>
+                  <Line type="monotone" dataKey="loading" name="PC1 loading" stroke="#2563eb" dot={{r:3}} strokeWidth={1.5}/>
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="pcdfba-card">
+              <div className="pcdfba-card-title">Top PC2 Reaction Loadings</div>
+              <p className="pcdfba-chart-sub">Top 20 reactions by |loading| for PC2.</p>
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={gemPC2Data} margin={{top:4,right:10,left:-10,bottom:48}}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0"/>
+                  <XAxis dataKey="rxn" tick={{fontSize:7}} angle={-45} textAnchor="end" interval={0}/>
+                  <YAxis tick={{fontSize:9}}/>
+                  <Tooltip/>
+                  <Line type="monotone" dataKey="loading" name="PC2 loading" stroke="#f59e0b" dot={{r:3}} strokeWidth={1.5}/>
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
       </div>
 
     </div>

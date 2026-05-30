@@ -223,7 +223,7 @@ function kernelSmooth(
  * @param outputTimes   Dense time grid for smoothed output
  * @param bandwidth     Kernel bandwidth [days]  (default 1.5, only for "kernel" method)
  * @param bolusDay      Feed bolus days (for discontinuity correction)
- * @param method        "kernel" (default) or "gp" (GP regression with SE kernel)
+ * @param method        "kernel" (default) | "gp" | "logistic" (logistic basis Bayesian linear regression)
  */
 export function runMetRaC(
   measurements: NoisyMeasurement[],
@@ -231,10 +231,13 @@ export function runMetRaC(
   outputTimes: number[],
   bandwidth = 1.5,
   bolusDay: number[] = [],
-  method: "kernel" | "gp" = "kernel",
+  method: "kernel" | "gp" | "logistic" = "kernel",
 ): SmoothedRate[] {
   if (method === "gp") {
     return runGPMetRaC(measurements, noise, outputTimes);
+  }
+  if (method === "logistic") {
+    return runLogisticMetRaC(measurements, noise, outputTimes);
   }
 
   const raw = estimateRawRates(measurements, noise, bolusDay);
@@ -298,6 +301,269 @@ function runGPMetRaC(
     const meanTit    = titValues.reduce((s, v) => s + v, 0) / titValues.length;
     const titSn      = Math.max(1, meanTit) * (noise.Tit_cv ?? 0.08);
     qp = gpEstimateRate(times, titValues, titSn, outputTimes, times, xvValues, +1);
+  }
+
+  return outputTimes.map((t, i) => ({
+    t,
+    q_Glc: glc.mean[i], q_Glc_lo95: glc.lo95[i], q_Glc_hi95: glc.hi95[i],
+    q_Lac: lac.mean[i], q_Lac_lo95: lac.lo95[i], q_Lac_hi95: lac.hi95[i],
+    q_Gln: gln.mean[i], q_Gln_lo95: gln.lo95[i], q_Gln_hi95: gln.hi95[i],
+    q_Glu: glu.mean[i], q_Glu_lo95: glu.lo95[i], q_Glu_hi95: glu.hi95[i],
+    q_NH4: nh4.mean[i], q_NH4_lo95: nh4.lo95[i], q_NH4_hi95: nh4.hi95[i],
+    q_p:   qp.mean[i],  q_p_lo95:   qp.lo95[i],  q_p_hi95:   qp.hi95[i],
+  }));
+}
+
+// ── Logistic Basis Bayesian Linear Regression (MetRaC §2.2 paper method) ──────
+//
+// Concentration model:  C(t) = w₀ + Σⱼ wⱼ σ(b·(t − cⱼ))
+// Prior:                w ~ N(0, τ²I)
+// Likelihood:           C_obs ~ N(Φw, σ_n²I)
+// Posterior (exact):    w|y ~ N(μ_w, Σ_w)
+//   Σ_w  = (ΦᵀΦ/σ_n² + I/τ²)⁻¹
+//   μ_w  = (1/σ_n²) Σ_w Φᵀy
+// Derivative at t*:
+//   d_mean(t*) = φ_d(t*) · μ_w
+//   d_var(t*)  = φ_d(t*)ᵀ Σ_w φ_d(t*)
+// Rate:  q(t*) = sign · d_mean / Xv(t*)    CI: ±1.96·sqrt(d_var)/Xv(t*)
+//
+// Steepness b is optimised by grid-search on the log marginal likelihood.
+// Exact Bayesian posterior CIs without MCMC — faithful to the paper's
+// logistic basis description (§2.2).
+
+const LOG_B_GRID = [0.3, 0.5, 0.8, 1.2, 2.0, 3.0, 5.0];
+const LOG_K_BASIS = 7;
+
+function _sigL(x: number): number {
+  if (x >= 30) return 1;
+  if (x <= -30) return 0;
+  return 1 / (1 + Math.exp(-x));
+}
+
+function _logDesign(
+  times: number[], centers: number[], b: number,
+): { Phi: number[][]; dPhi: number[][] } {
+  const Phi: number[][] = [];
+  const dPhi: number[][] = [];
+  for (const t of times) {
+    const row = [1.0];
+    const drow = [0.0];
+    for (const c of centers) {
+      const s = _sigL(b * (t - c));
+      row.push(s);
+      drow.push(b * s * (1 - s));
+    }
+    Phi.push(row);
+    dPhi.push(drow);
+  }
+  return { Phi, dPhi };
+}
+
+function _ptP(Phi: number[][]): number[][] {
+  const K1 = Phi[0].length;
+  const A: number[][] = Array.from({ length: K1 }, () => new Array<number>(K1).fill(0));
+  for (const row of Phi)
+    for (let i = 0; i < K1; i++)
+      for (let j = 0; j < K1; j++) A[i][j] += row[i] * row[j];
+  return A;
+}
+
+function _pTy(Phi: number[][], y: number[]): number[] {
+  const K1 = Phi[0].length;
+  const v = new Array<number>(K1).fill(0);
+  for (let i = 0; i < y.length; i++)
+    for (let j = 0; j < K1; j++) v[j] += Phi[i][j] * y[i];
+  return v;
+}
+
+function _logChol(A: number[][]): number[][] {
+  const n = A.length;
+  const L: number[][] = Array.from({ length: n }, () => new Array<number>(n).fill(0));
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j <= i; j++) {
+      let s = A[i][j];
+      for (let k = 0; k < j; k++) s -= L[i][k] * L[j][k];
+      L[i][j] = j < i ? s / Math.max(L[j][j], 1e-14) : Math.sqrt(Math.max(s, 1e-12));
+    }
+  }
+  return L;
+}
+
+function _logFwd(L: number[][], b: number[]): number[] {
+  const n = b.length, x = new Array<number>(n).fill(0);
+  for (let i = 0; i < n; i++) {
+    let s = b[i];
+    for (let k = 0; k < i; k++) s -= L[i][k] * x[k];
+    x[i] = s / L[i][i];
+  }
+  return x;
+}
+
+function _logBwd(L: number[][], b: number[]): number[] {
+  const n = b.length, x = new Array<number>(n).fill(0);
+  for (let i = n - 1; i >= 0; i--) {
+    let s = b[i];
+    for (let k = i + 1; k < n; k++) s -= L[k][i] * x[k];
+    x[i] = s / L[i][i];
+  }
+  return x;
+}
+
+function _logCholSolve(L: number[][], b: number[]): number[] {
+  return _logBwd(L, _logFwd(L, b));
+}
+
+function _qForm(Sigma: number[][], phi: number[]): number {
+  const n = phi.length;
+  let s = 0;
+  for (let i = 0; i < n; i++) {
+    let r = 0;
+    for (let j = 0; j < n; j++) r += Sigma[i][j] * phi[j];
+    s += phi[i] * r;
+  }
+  return s;
+}
+
+function _logDot(a: number[], b: number[]): number {
+  return a.reduce((acc, x, i) => acc + x * b[i], 0);
+}
+
+function _bayesLinReg(
+  Phi: number[][], y: number[], sn: number, tau: number,
+): { mu: number[]; Sigma: number[][] } {
+  const K1 = Phi[0].length;
+  const inv_sn2 = 1 / (sn * sn), inv_tau2 = 1 / (tau * tau);
+  const PtP = _ptP(Phi);
+  const A: number[][] = PtP.map((row, i) =>
+    row.map((v, j) => v * inv_sn2 + (i === j ? inv_tau2 : 0)),
+  );
+  const LA = _logChol(A);
+  const Sigma: number[][] = Array.from({ length: K1 }, (_, col) => {
+    const e = new Array<number>(K1).fill(0); e[col] = 1;
+    return _logCholSolve(LA, e);
+  });
+  const rhs = _pTy(Phi, y).map((v) => v * inv_sn2);
+  const mu = _logCholSolve(LA, rhs);
+  return { mu, Sigma };
+}
+
+function _logML_logistic(
+  Phi: number[][], y: number[], sn: number, tau: number,
+): number {
+  const n = y.length, K1 = Phi[0].length;
+  const tau2 = tau * tau, sn2 = sn * sn;
+  const C: number[][] = Array.from({ length: n }, (_, i) =>
+    Array.from({ length: n }, (__, j) => {
+      let s = 0;
+      for (let k = 0; k < K1; k++) s += Phi[i][k] * Phi[j][k];
+      return tau2 * s + (i === j ? sn2 + 1e-6 : 0);
+    }),
+  );
+  try {
+    const LC = _logChol(C);
+    const alpha = _logCholSolve(LC, y);
+    let logDet = 0;
+    for (let i = 0; i < n; i++) logDet += Math.log(Math.max(LC[i][i], 1e-14));
+    return -0.5 * _logDot(y, alpha) - logDet - 0.5 * n * Math.log(2 * Math.PI);
+  } catch {
+    return -Infinity;
+  }
+}
+
+function _optimiseB(
+  times: number[], values: number[], centers: number[],
+  sn: number, tau: number,
+): number {
+  let bestB = 1.0, bestScore = -Infinity;
+  for (const b of LOG_B_GRID) {
+    const { Phi } = _logDesign(times, centers, b);
+    const score = _logML_logistic(Phi, values, sn, tau);
+    if (Number.isFinite(score) && score > bestScore) {
+      bestScore = score; bestB = b;
+    }
+  }
+  return bestB;
+}
+
+function _interpXv(t: number, xvTimes: number[], xvVals: number[]): number {
+  if (xvTimes.length === 0) return 1;
+  if (t <= xvTimes[0]) return xvVals[0];
+  if (t >= xvTimes[xvTimes.length - 1]) return xvVals[xvVals.length - 1];
+  let lo = 0, hi = xvTimes.length - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (xvTimes[mid] <= t) lo = mid; else hi = mid;
+  }
+  const f = (t - xvTimes[lo]) / (xvTimes[hi] - xvTimes[lo]);
+  return xvVals[lo] + f * (xvVals[hi] - xvVals[lo]);
+}
+
+function _logisticEstimateRate(
+  measTimes: number[],
+  values: number[],
+  sn: number,
+  outputTimes: number[],
+  xvMeasTimes: number[],
+  xvValues: number[],
+  sign: number,
+): { mean: number[]; lo95: number[]; hi95: number[] } {
+  const ZERO = () => outputTimes.map(() => 0);
+  const n = measTimes.length;
+  if (n < 4) return { mean: ZERO(), lo95: ZERO(), hi95: ZERO() };
+
+  const t0 = measTimes[0], tEnd = measTimes[n - 1];
+  const centers = Array.from({ length: LOG_K_BASIS }, (_, j) =>
+    t0 + (tEnd - t0) * (j + 1) / (LOG_K_BASIS + 1),
+  );
+  const lo = Math.min(...values), hi = Math.max(...values);
+  const tau = Math.max(0.5, hi - lo);
+
+  const b = _optimiseB(measTimes, values, centers, sn, tau);
+  const { Phi } = _logDesign(measTimes, centers, b);
+  const { mu, Sigma } = _bayesLinReg(Phi, values, sn, tau);
+  const { dPhi: dPhiOut } = _logDesign(outputTimes, centers, b);
+
+  const mean: number[] = [], lo95: number[] = [], hi95: number[] = [];
+  for (let i = 0; i < outputTimes.length; i++) {
+    const dphi  = dPhiOut[i];
+    const dmean = _logDot(dphi, mu);
+    const dvar  = _qForm(Sigma, dphi);
+    const dstd  = Math.sqrt(Math.max(dvar, 0));
+    const xv    = Math.max(_interpXv(outputTimes[i], xvMeasTimes, xvValues), 1e-4);
+    const q     = sign * dmean / xv;
+    const ci    = 1.96 * dstd / xv;
+    mean.push(q); lo95.push(q - ci); hi95.push(q + ci);
+  }
+  return { mean, lo95, hi95 };
+}
+
+function runLogisticMetRaC(
+  measurements: NoisyMeasurement[],
+  noise: MetRaCNoiseConfig,
+  outputTimes: number[],
+): SmoothedRate[] {
+  if (measurements.length < 4) return [];
+
+  const times    = measurements.map((m) => m.t);
+  const xvValues = measurements.map((m) => m.Xv);
+
+  const est = (values: number[], sn: number, sign: number) =>
+    _logisticEstimateRate(times, values, sn, outputTimes, times, xvValues, sign);
+
+  const glc = est(measurements.map((m) => m.Glc), noise.Glc_abs, -1);
+  const lac = est(measurements.map((m) => m.Lac), noise.Lac_abs, +1);
+  const gln = est(measurements.map((m) => m.Gln), noise.Gln_abs, -1);
+  const glu = est(measurements.map((m) => m.Glu), noise.Glu_abs, -1);
+  const nh4 = est(measurements.map((m) => m.NH4), noise.NH4_abs, +1);
+
+  const hasTit = measurements.some((m) => m.Tit !== undefined) && (noise.Tit_cv ?? 0) > 0;
+  const ZERO = new Array<number>(outputTimes.length).fill(0);
+  let qp = { mean: ZERO, lo95: ZERO, hi95: ZERO };
+  if (hasTit) {
+    const titValues = measurements.map((m) => m.Tit ?? 0);
+    const meanTit   = titValues.reduce((s, v) => s + v, 0) / titValues.length;
+    const titSn     = Math.max(1, meanTit) * (noise.Tit_cv ?? 0.08);
+    qp = est(titValues, titSn, +1);
   }
 
   return outputTimes.map((t, i) => ({

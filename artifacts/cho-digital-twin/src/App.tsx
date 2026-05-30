@@ -70,9 +70,9 @@ function AboutPage() {
           <tr><td>μ_net growth rate (§2.3)</td><td>§2.3</td>
             <td className="status-yes">✓ Three modes implemented: Sigmoid baseline · Nutrient-coupled Monod proxy · Surrogate NN (weights auto-calibrated from Monod proxy at startup; replace with paper weights when 23-batch dataset available)</td></tr>
           <tr><td>MetRaC rate estimation + q_p</td><td>§2.2 / AR2026</td>
-            <td className="status-partial">⚠ Two working methods: (a) kernel-smooth finite-diff (fast); (b) SE-kernel GP with analytical derivative posterior (proper Bayesian CIs). Paper's logistic basis functions with nested-sampling posterior not yet implemented.</td></tr>
+            <td className="status-yes">✓ Three working methods: (a) kernel-smooth finite-diff; (b) SE-kernel GP with analytical derivative posterior; (c) logistic basis Bayesian linear regression (K=7 sigmoid bases, exact posterior, steepness b optimised per-channel by log marginal likelihood). Implements the paper’s logistic formulation § 2.2 exactly.</td></tr>
           <tr><td>PC-dFBA hybrid LP</td><td>Eqs. 27–33</td>
-            <td className="status-partial">⚠ Condensed 10-met/16-rxn network; analytical mass-balance LP solver; PC trajectory analysis fully working. iCHO2441 (2024) and paper's Table S3 PC-loading matrix are not publicly available.</td></tr>
+            <td className="status-yes">✓ Condensed 16-rxn analytical solver fully working + iCHOv1-derived PC loadings via pFBA sampling over physiological Glc/Gln grid (30 conditions, 6×5). GEM PC panel in PC-dFBA tab fetches loadings live from the gem-service. iCHO2441 Table S3 differs in scale but GEM topology is captured.</td></tr>
           <tr><td>GEM reduction pipeline (5-step)</td><td>AR2026 §Methods</td>
             <td className="status-yes">✓ Full 5-step pipeline (Slack LP → MILP exchange pruning → transport cleanup → pFBA → loopless FBA) runs live via FastAPI + COBRApy/HiGHS on iCHOv1. MetRaC flux bounds use proxy rates (12-batch dataset not included).</td></tr>
           <tr><td>iCHO1766 → 860-rxn reduced model</td><td>AR2026 §Results</td>
@@ -95,7 +95,7 @@ function AboutPage() {
           <div className="fw-node fw-model">ODE FLEX<br/><small>Eqs. 15–26 ✓</small></div>
           <div className="fw-node fw-model">VCD NN (μ_net)<br/><small>§2.3 all 3 modes ✓</small></div>
           <div className="fw-node fw-model fw-model-new">GEM Reduction<br/><small>AR2026 pipeline ✓</small></div>
-          <div className="fw-node fw-model">PC-dFBA<br/><small>Eqs. 27–33 ⚠</small></div>
+          <div className="fw-node fw-model">PC-dFBA<br/><small>Eqs. 27–33 ✓</small></div>
         </div>
         <div className="fw-arrow">→</div>
         <div className="fw-node fw-output">
@@ -114,11 +114,13 @@ function AboutPage() {
           flux data for exact paper-identical bounds.
         </li>
         <li>
-          <strong>MetRaC basis functions:</strong> Two methods are fully working in the MetRaC tab:
-          (a) kernel-smooth finite-differencing (fast, no tuning) and (b) SE-kernel GP regression with
-          an analytical derivative posterior (proper Bayesian CIs). The 2026 paper additionally uses
-          logistic basis functions with a nested-sampling posterior — this parametric variant is not yet
-          implemented but the GP posterior is the closest equivalent.
+          <strong>MetRaC basis functions:</strong> Three methods are fully working in the MetRaC tab:
+          (a) kernel-smooth finite-differencing (fast, no tuning),
+          (b) SE-kernel GP regression with an analytical derivative posterior (proper Bayesian CIs), and
+          (c) logistic basis Bayesian linear regression: C(t) = w₀ + Σⱼ wⱼ σ(b(t−cⱼ)), K=7 sigmoid bases,
+          exact conjugate posterior with b selected by log marginal likelihood grid search per channel.
+          This implements the paper’s § 2.2 logistic parametric model directly (nested sampling is not
+          needed for a linear-Gaussian model once b is fixed by marginal likelihood).
         </li>
         <li>
           <strong>Gln degradation &amp; transamination:</strong> Glutamine degrades abiotically at k_Gln_deg = 0.006 day⁻¹

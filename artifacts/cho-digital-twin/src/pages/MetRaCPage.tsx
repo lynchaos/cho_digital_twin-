@@ -164,8 +164,8 @@ export default function MetRaCPage() {
   const [sampleEvery, setSampleEvery] = useState(1.0);
   const [running, setRunning] = useState(false);
   const [seed, setSeed] = useState(0);  // bumped to regenerate noise
-  const [method, setMethod] = useState<"kernel" | "gp">("kernel");
-  const methodRef = useRef<"kernel" | "gp">("kernel");
+  const [method, setMethod] = useState<"kernel" | "gp" | "logistic">("kernel");
+  const methodRef = useRef<"kernel" | "gp" | "logistic">("kernel");
 
   const [odesim, setOdesim]   = useState<TimePoint[]>([]);
   const [meas,   setMeas]     = useState<NoisyMeasurement[]>([]);
@@ -192,7 +192,7 @@ export default function MetRaCPage() {
     }, 20);
   }, [noiseConfig, bandwidth, sampleEvery, seed]);
 
-  const handleMethodChange = (m: "kernel" | "gp") => {
+  const handleMethodChange = (m: "kernel" | "gp" | "logistic") => {
     methodRef.current = m;
     setMethod(m);
     run();
@@ -237,8 +237,8 @@ export default function MetRaCPage() {
           <h1 className="metrac-title">MetRaC — Metabolic Rate Calculation</h1>
           <p className="metrac-subtitle">
             Bayesian rate estimation · §2.2 Richelle et al. (2025) ·
-            <span className={`metrac-method-badge${method === "gp" ? " gp" : ""}`}>
-              {method === "gp" ? "GP Regression" : "Kernel Smooth"}
+            <span className={`metrac-method-badge${method === "gp" ? " gp" : method === "logistic" ? " logistic" : ""}`}>
+              {method === "gp" ? "GP Regression" : method === "logistic" ? "Logistic Basis" : "Kernel Smooth"}
             </span>
           </p>
         </div>
@@ -258,7 +258,7 @@ export default function MetRaCPage() {
             (6) 95% CI via inverse-variance propagation.
             &nbsp;<span className="metrac-algo-note">Fast; CI is approximate (depends on h choice).</span>
           </>
-        ) : (
+        ) : method === "gp" ? (
           <>
             <strong>GP method:</strong>&nbsp;
             (1) ODE virtual bioreactor → (2) Gaussian measurement noise →
@@ -267,8 +267,19 @@ export default function MetRaCPage() {
             (5) Analytical derivative posterior μ′(t), σ′(t) →
             (6) q = sign · μ′(t) / X_v with 95% CI = ±1.96 σ′(t)/X_v.
             &nbsp;<span className="metrac-algo-note">
-              Proper Bayesian posterior on dC/dt · no finite-difference artefacts ·
-              closest in-browser equivalent to paper's nested-sampling B-splines.
+              Proper Bayesian posterior on dC/dt · no finite-difference artefacts.
+            </span>
+          </>
+        ) : (
+          <>
+            <strong>Logistic basis method (§2.2 paper):</strong>&nbsp;
+            (1) ODE virtual bioreactor → (2) Gaussian measurement noise →
+            (3) Fit C(t) = w₀ + Σ wⱼ σ(b(t−cⱼ)) with K={"7"} logistic bases →
+            (4) Bayesian linear regression: exact posterior w|y ~ N(μ_w, Σ_w) →
+            (5) Steepness b optimised by log marginal likelihood grid search →
+            (6) Derivative posterior dC/dt → q = sign · dC/dt / X_v, 95% CI = ±1.96 σ_d/X_v.
+            &nbsp;<span className="metrac-algo-note">
+              Exact Bayesian posterior · no MCMC · implements paper's logistic basis formulation directly.
             </span>
           </>
         )}
@@ -331,6 +342,12 @@ export default function MetRaCPage() {
                 disabled={running}>
                 GP Regression
               </button>
+              <button
+                className={`metrac-method-btn${method === "logistic" ? " active" : ""}`}
+                onClick={() => handleMethodChange("logistic")}
+                disabled={running}>
+                Logistic Basis
+              </button>
             </div>
             {method === "gp" && (
               <p className="ctrl-hint" style={{ marginTop: "0.4rem" }}>
@@ -338,13 +355,19 @@ export default function MetRaCPage() {
                 by log marginal likelihood. Bandwidth slider inactive.
               </p>
             )}
+            {method === "logistic" && (
+              <p className="ctrl-hint" style={{ marginTop: "0.4rem" }}>
+                Logistic basis Bayesian linear regression (paper §2.2). Steepness
+                b optimised by marginal likelihood. Bandwidth slider inactive.
+              </p>
+            )}
           </section>
 
-          <section className={`ctrl-section${method === "gp" ? " ctrl-section--dim" : ""}`}>
+          <section className={`ctrl-section${method === "gp" || method === "logistic" ? " ctrl-section--dim" : ""}`}>
             <h3 className="ctrl-sect-title">Smoother Bandwidth</h3>
             <p className="ctrl-hint">
               Kernel bandwidth h [days]. Larger = smoother trajectory, wider CI.
-              {method === "gp" && <em> (not used in GP mode)</em>}
+              {(method === "gp" || method === "logistic") && <em> (not used in this mode)</em>}
             </p>
             <div className="metrac-noise-row">
               <span className="metrac-noise-label">h</span>
@@ -352,7 +375,7 @@ export default function MetRaCPage() {
                 value={bandwidth}
                 onChange={(e) => setBandwidth(Number(e.target.value))}
                 className="metrac-noise-slider"
-                disabled={method === "gp"} />
+                disabled={method === "gp" || method === "logistic"} />
               <span className="metrac-noise-val">{bandwidth.toFixed(1)} d</span>
             </div>
           </section>
@@ -437,7 +460,7 @@ export default function MetRaCPage() {
                 Nadaraya-Watson smoother. Wider band = less certain. Larger h → smoother
                 but broader CI. The CIs should bracket the truth ~95% of the time on average.
               </>
-            ) : (
+            ) : method === "gp" ? (
               <>
                 <strong>GP method CIs:</strong> The shaded band is the ±1.96 σ posterior
                 on dC/dt from the SE-kernel GP, divided by X_v. The GP fits raw concentration
@@ -446,13 +469,23 @@ export default function MetRaCPage() {
                 balances fit quality against over-fitting. CIs widen naturally at culture
                 endpoints and in low-cell-density periods.
               </>
+            ) : (
+              <>
+                <strong>Logistic basis CIs:</strong> The shaded band is ±1.96 σ_d / X_v,
+                where σ_d² = φ_d(t)ᵀ Σ_w φ_d(t) is the posterior variance of the derivative
+                at each output time. K=7 sigmoid basis functions are placed uniformly across
+                the culture span. Steepness b is selected by grid search on log marginal
+                likelihood for each metabolite independently. This implements the paper's
+                logistic basis formulation (§2.2) with an exact Bayesian posterior (no MCMC
+                or nested sampling needed for a linear-Gaussian model).
+              </>
             )}
             <br />
             <strong>Paper's approach (§2.2):</strong> Richelle et al. use nested sampling
-            over B-spline coefficients. The GP method here is structurally equivalent
-            (smooth latent function fitted to noisy observations, derivative posterior for
-            rates) but uses a more tractable marginal-likelihood kernel framework.
-            Full nested sampling is not implemented.
+            over logistic basis coefficients. The logistic basis method here uses the same
+            basis family with an exact Bayesian posterior (conjugate linear-Gaussian model
+            renders nested sampling unnecessary for fixed basis positions).
+            The GP method is structurally equivalent but uses a kernel covariance instead.
           </div>
         </div>
       </div>
