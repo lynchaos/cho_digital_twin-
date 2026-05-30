@@ -366,13 +366,15 @@ def _run_pcdfba_sampling_sync(job_id: str) -> None:
     t0 = time.time()
 
     try:
-        m = _get_reduced_model()
-        model_source = "reduced"
-        if m is None:
-            log.info("No reduced model cached — using base model for pcdfba sampling")
-            m = get_base_model()
-            m, _ = step0_setup(m)
-            model_source = "base (unreduced)"
+        # Always use the base model for pcdfba sampling.
+        # The reduced model has tightly-constrained internal bounds from the
+        # reduction pipeline, so forcing different glucose/glutamine uptake rates
+        # on it produces identical flux vectors (zero variance) — useless for PCA.
+        # The base model correctly propagates exchange-rate changes through the
+        # full metabolic network, yielding meaningful PC structure.
+        m = get_base_model()
+        m, _ = step0_setup(m)
+        model_source = "base"
 
         # Locate key exchange reactions.
         # Use specific substrings to avoid matching wrong metabolites
