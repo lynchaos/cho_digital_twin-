@@ -374,12 +374,14 @@ def _run_pcdfba_sampling_sync(job_id: str) -> None:
             m, _ = step0_setup(m)
             model_source = "base (unreduced)"
 
-        # Locate key exchange reactions
+        # Locate key exchange reactions.
+        # Use specific substrings to avoid matching wrong metabolites
+        # (e.g. EX_glcur_e matches "EX_glc" but is glucuronate, not glucose).
         glc_rxn = next(
-            (r for r in m.exchanges if r.id.startswith("EX_glc")), None
+            (r for r in m.exchanges if "glc__D" in r.id or r.id in ("EX_glc_D_e", "EX_glc__D_e")), None
         )
         gln_rxn = next(
-            (r for r in m.exchanges if r.id.startswith("EX_gln")), None
+            (r for r in m.exchanges if "gln__L" in r.id or r.id in ("EX_gln_L_e", "EX_gln__L_e")), None
         )
         if glc_rxn is None or gln_rxn is None:
             _update({"status": "error",
@@ -395,14 +397,26 @@ def _run_pcdfba_sampling_sync(job_id: str) -> None:
         for q_glc in PCDFBA_GLC_GRID:
             for q_gln in PCDFBA_GLN_GRID:
                 with m:
-                    glc_rxn.lower_bound = -abs(q_glc)
-                    gln_rxn.lower_bound = -abs(q_gln)
+                    # Force exact uptake rates so each grid point produces a
+                    # distinct flux vector (setting only lower_bound lets pFBA
+                    # minimize to the same solution regardless of the bound).
+                    glc_rxn.bounds = (-abs(q_glc), -abs(q_glc))
+                    gln_rxn.bounds = (-abs(q_gln), -abs(q_gln))
                     try:
                         sol = pfba(m)
                         if sol.status != "optimal":
                             continue
                     except Exception:
-                        continue
+                        # This grid point is infeasible at forced uptake rates;
+                        # fall back to unconstrained upper bound.
+                        try:
+                            glc_rxn.bounds = (-abs(q_glc), 0.0)
+                            gln_rxn.bounds = (-abs(q_gln), 0.0)
+                            sol = pfba(m)
+                            if sol.status != "optimal":
+                                continue
+                        except Exception:
+                            continue
                 fluxes = [float(sol.fluxes.get(rid, 0.0)) for rid in rxn_order]
                 flux_matrix.append(fluxes)
                 conditions.append({"q_glc": q_glc, "q_gln": q_gln})
