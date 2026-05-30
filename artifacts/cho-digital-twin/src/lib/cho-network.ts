@@ -90,7 +90,7 @@ export const S_MATRIX: number[][] = [
   [  0,  0,  0,  0,   0,  0,  0,  0, +1, -1,  0,  0,  0,  0,  0, +1 ],
   //SUCC:
   [  0,  0,  0,  0,   0,  0,  0,  0,  0, +1, -1,  0,  0,  0,  0,  0 ],
-  //MAL:
+  //MAL:   SDH_FH produces MAL (+1); AKGDH produces SUCC (0 here)
   [  0,  0,  0,  0,   0,  0,  0,  0,  0,  0, +1, -1, -1,  0,  0,  0 ],
   //GLU:   EX_GLU is +1 (uptake adds to intracellular pool)
   [  0,  0,  0, +1,   0,  0,  0,  0,  0,  0,  0,  0,  0,  0, +1, -1 ],

@@ -277,12 +277,12 @@ export function exportToCsv(results: TimePoint[]): string {
     "t_day","Xv_Mc_per_mL","Xd_Mc_per_mL","Xl_Mc_per_mL","B",
     "Glc_mM","Lac_mM","Gln_mM","Glu_mM","NH4_mM","Tit_mg_per_L",
     "mu_net_per_day","mu_eff_per_day","kd_per_day","kl_per_day",
-    "volume_mL","q_Glc","q_Lac","q_Gln","q_Glu","q_NH4",
+    "volume_mL","q_Glc","q_Lac","q_Gln","q_Glu","q_NH4","q_p",
   ].join(",");
   const rows = results.map((r) =>
     [r.t, r.Xv, r.Xd, r.Xl, r.B, r.Glc, r.Lac, r.Gln, r.Glu, r.NH4, r.Tit,
      r.mu_net, r.mu_eff, r.kd, r.kl, r.volume,
-     r.q_Glc, r.q_Lac, r.q_Gln, r.q_Glu, r.q_NH4]
+     r.q_Glc, r.q_Lac, r.q_Gln, r.q_Glu, r.q_NH4, r.q_p]
     .map((v) => v.toFixed(6)).join(","),
   );
   return [header, ...rows].join("\n");

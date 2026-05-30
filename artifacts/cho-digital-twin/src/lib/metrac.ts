@@ -186,22 +186,6 @@ function kernelSmooth(
   sdKey: keyof RawRateEstimate,
   h = 1.5,
 ): { mean: number[]; lo95: number[]; hi95: number[] } {
-  return {
-    mean:  new Array(outputTimes.length),
-    lo95:  new Array(outputTimes.length),
-    hi95:  new Array(outputTimes.length),
-  };
-  // (filled below in-place to avoid allocating three times)
-  // ↑ dummy; replaced with the real implementation:
-}
-
-function kernelSmoothImpl(
-  outputTimes: number[],
-  rawEstimates: RawRateEstimate[],
-  key: keyof RawRateEstimate,
-  sdKey: keyof RawRateEstimate,
-  h = 1.5,
-): { mean: number[]; lo95: number[]; hi95: number[] } {
   const mean: number[] = [];
   const lo95: number[] = [];
   const hi95: number[] = [];
@@ -228,9 +212,6 @@ function kernelSmoothImpl(
   }
   return { mean, lo95, hi95 };
 }
-
-// Suppress dead-code warning for the dummy stub
-void kernelSmooth;
 
 // ── Step 3: Full MetRaC pipeline ───────────────────────────────────────────────
 
@@ -260,7 +241,7 @@ export function runMetRaC(
   if (raw.length < 2) return [];
 
   const smooth = (k: keyof RawRateEstimate, sk: keyof RawRateEstimate) =>
-    kernelSmoothImpl(outputTimes, raw, k, sk, bandwidth);
+    kernelSmooth(outputTimes, raw, k, sk, bandwidth);
 
   const glc = smooth("q_Glc", "q_Glc_sd");
   const lac = smooth("q_Lac", "q_Lac_sd");

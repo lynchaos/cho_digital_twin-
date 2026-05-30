@@ -109,7 +109,7 @@ function RateChart({
 
 interface ConcChartEntry extends Record<string, unknown> {
   t: number;
-  true_val: number;
+  true_val: number | null;
   meas: number | null;
 }
 
@@ -127,7 +127,7 @@ function ConcChart({
   const fmt = (v: number) => v.toFixed(2);
   const data: ConcChartEntry[] = [
     ...odeseries.map((r) => ({ t: r.t, true_val: r[trueKey] as number, meas: null })),
-    ...measurements.map((m) => ({ t: m.t, true_val: 0, meas: m[measKey] as number })),
+    ...measurements.map((m) => ({ t: m.t, true_val: null, meas: m[measKey] as number })),
   ];
   data.sort((a, b) => a.t - b.t);
   return (
