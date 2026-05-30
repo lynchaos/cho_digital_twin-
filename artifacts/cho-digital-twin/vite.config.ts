@@ -66,6 +66,15 @@ export default defineConfig({
     fs: {
       strict: true,
     },
+    // When API_SERVER_URL is set (local dev), proxy backend routes to Express
+    ...(process.env.API_SERVER_URL
+      ? {
+          proxy: {
+            "/api": { target: process.env.API_SERVER_URL, changeOrigin: true },
+            "/gem": { target: process.env.API_SERVER_URL, changeOrigin: true },
+          },
+        }
+      : {}),
   },
   preview: {
     port,

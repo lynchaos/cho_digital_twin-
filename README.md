@@ -163,19 +163,23 @@ cd ../..
 
 ### Run in development
 
-```bash
-# Start the React frontend + Express proxy
-pnpm --filter ./artifacts/cho-digital-twin dev
-pnpm --filter ./artifacts/api-server dev
+Start each service in a separate terminal from the repo root:
 
-# Start the FastAPI GEM service (required for the GEM Red. tab only)
-cd artifacts/gem-service
-uvicorn main:app --port 8082 --reload
+```bash
+# 1. FastAPI GEM service — required only for the GEM Red. tab
+python -m uvicorn main:app --port 8082 --reload --app-dir artifacts/gem-service
+
+# 2. Express API / proxy server
+PORT=3001 pnpm --filter ./artifacts/api-server dev
+
+# 3. Vite frontend (proxies /api and /gem to Express)
+PORT=5173 BASE_PATH=/ API_SERVER_URL=http://localhost:3001 \
+  pnpm --filter ./artifacts/cho-digital-twin dev
 ```
 
-The app will be available at `http://localhost:5173`.
+The app will be available at **http://localhost:5173**.
 
-> **Note:** The Simulator, MetRaC, PC-dFBA, Sweep, Equations, and Parameters tabs all run entirely client-side and work without the Python backend. Only the **GEM Red.** tab requires the FastAPI service.
+> **Note:** The Simulator, MetRaC, PC-dFBA, Sweep, Equations, and Parameters tabs all run entirely client-side and work without the Python backend. Only the **GEM Red.** tab requires the FastAPI service running on port 8082.
 
 ### Build for production
 
