@@ -1,4 +1,0 @@
-- [MetRaC GP upgrade](metrac-gp.md) — GP rate estimation added as alternative to kernel-smooth; uses SE kernel + Cholesky + derivative posterior
-- [PC-dFBA EX_GLU sign convention](pcdfba-fba-derivation.md) — EX_GLU in cho-network.ts S matrix GLU row = +1 (uptake-positive); do NOT change
-- [GEM Reduction tab](gem-reduction-tab.md) — 8th tab (⊗ GEM Red.) added from Antonakoudis & Richelle (2026); pipeline steps 0-5, CI analysis, subsystem bars, method comparison, core metabolites, key LP/MILP equations
-- [Express proxy POST body fix](express-proxy-body-stream.md) — express.json() before createProxyMiddleware consumes the stream; POST proxying hangs. Place proxy BEFORE body parsers.

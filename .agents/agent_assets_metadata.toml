@@ -1,8 +1,0 @@
-uploads = []
-generated = []
-
-[[outputs]]
-id = "I100fzb6hb-UvYJsWh6bZ"
-uri = "file://CHO_Digital_Twin_Blog_Post.md"
-type = "text"
-title = "CHO Digital Twin — Blog Post"
